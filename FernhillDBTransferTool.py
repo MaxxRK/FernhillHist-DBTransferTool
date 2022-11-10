@@ -53,7 +53,7 @@ def hist_data_index(fern_conn, db_engine):
                                         ).fetchall()
     for row in historic_tables:
         table_name = row[0]
-        old_historics.append(table_name)
+        old_historics.append(table_name.lower())
     print("Fetching data to add to table")
     odbc_sql = """ SELECT SourceName, TableName, Units, MinScale, MaxScale, DataType FROM HistoricDataIndex """
     df_fern = pd.read_sql_query(odbc_sql, fern_conn)
@@ -63,7 +63,7 @@ def hist_data_index(fern_conn, db_engine):
         total_historics.append(col2.lower())
     for entry in old_historics:
         if entry not in total_historics and entry != 'historicdataindex':
-            db_engine.execute(f"DROP TABLE {entry}")
+            db_engine.execute(f"DROP TABLE IF EXISTS {entry}")
             print(f"Dropping table that is no longer needed {entry}")
     print("Finished Historic Data Index Check!")
 
@@ -89,7 +89,7 @@ def hist_data(fern_conn, dbengine):
     logger.debug("Running database operations...")
     for row in tqdm(range(row_count)):
         try:
-            hist_table_name = hist_table[row][0]
+            hist_table_name = hist_table[row][0].lower()
             logger.debug(f"Starting update for {hist_table_name}...")
             logger.debug("Running query for information to insert into PostgreSQL...")
             start = timer()
@@ -99,8 +99,8 @@ def hist_data(fern_conn, dbengine):
             logger.debug(f"Fernhill query took {time_taken} to complete.")
             logger.debug("Starting External Database update.")
             start = timer()
-            df_fern.to_sql('temptable', dbengine, index=False, schema='public', if_exists='replace', method='multi', chunksize=1000)
-            dbengine.execute('ALTER TABLE temptable ADD COLUMN entryid SERIAL PRIMARY KEY;')
+            df_fern.to_sql(hist_table_name, dbengine, index=False, schema='public', if_exists='replace', method='multi', chunksize=1000)
+            dbengine.execute(f'ALTER TABLE {hist_table_name} ADD COLUMN entryid SERIAL PRIMARY KEY;')
             end = timer()
             time_taken = round(end - start, 2)
             logger.debug(f"External Database operations took {time_taken} to complete.")
@@ -177,19 +177,19 @@ def config_handling(values, submit):
         with open(config_path, 'w') as f:
                 config.write(f)
         settings_layout = [
-            [sg.Text('Database', size=(55, 1), justification='center')],
-            [sg.Push(), sg.Text('Type:'), sg.InputText()],
-            [sg.Push(), sg.Text('User Name:'), sg.InputText()],
-            [sg.Push(), sg.Text('Password:'), sg.InputText(password_char='*')],
-            [sg.Push(), sg.Text('Host:'), sg.InputText()],
-            [sg.Push(), sg.Text('Port:'), sg.InputText()],
-            [sg.Push(), sg.Text('Database Name:'), sg.InputText()],
-            [sg.Text('Fernhill', size=(55, 1), justification='center')],
-            [sg.Push(), sg.Text('Connection String:'), sg.InputText()],
-            [sg.Push(), sg.Text('Automatically Update?'), sg.Radio('Yes', "AutoUpdate", default=True, size=(10, 1), k='-AU1-'), sg.Radio('No', "AutoUpdate", default=False, size=(10, 1), k='-AU2-')],
-            [sg.Push(), sg.Text('Auto Update Runs at 6:00am and 6:00pm.', size=(55, 1), justification='center')],
-            [sg.Push(), sg.Text('YOU MUST HIT THE SUBMIT BUTTON TO SAVE CONFIG CHANGES', size=(55, 1), justification='center')],
-            [sg.Button('Submit')]
+            [sg.Text('Database', size=(65, 1), justification='center')],
+            [sg.Push(), sg.Text('Type:'), sg.InputText(padding=((0, 100), (0, 0)))],
+            [sg.Push(), sg.Text('User Name:'), sg.InputText(padding=((0, 100), (0, 0)))],
+            [sg.Push(), sg.Text('Password:'), sg.InputText(password_char='*', padding=((0, 100), (0, 0)))],
+            [sg.Push(), sg.Text('Host:'), sg.InputText(padding=((0, 100), (0, 0)))],
+            [sg.Push(), sg.Text('Port:'), sg.InputText(padding=((0, 100), (0, 0)))],
+            [sg.Push(), sg.Text('Database Name:'), sg.InputText(padding=((0, 100), (0, 0)))],
+            [sg.Text('Fernhill', size=(65, 1), justification='center')],
+            [sg.Push(), sg.Text('Connection String:'), sg.InputText(padding=((0, 100), (0, 0)))],
+            [sg.Push(), sg.Text('Automatically Update?'), sg.Radio('Yes', "AutoUpdate", default=True, size=(10, 1), k='-AU1-'), sg.Radio('No', "AutoUpdate", default=False, size=(10, 1), k='-AU2-', pad=((0, 100), (0, 0)))],
+            [sg.Push(), sg.Text('Auto Update Runs at 6:00am and 6:00pm.', size=(65, 1), justification='center')],
+            [sg.Push(), sg.Text('YOU MUST HIT THE SUBMIT BUTTON TO SAVE CONFIG CHANGES', size=(65, 1), justification='center')],
+            [sg.Button('Submit', size=(25, 1), pad=((170, 0), (15, 15)))]
         ]
         return config, settings_layout
 
@@ -204,19 +204,19 @@ def config_handling(values, submit):
             au2 = False
         sg.theme('dark grey 9')
         settings_layout = [
-            [sg.Text('Database', size=(55, 1), justification='center')],
-            [sg.Push(), sg.Text('Type:'), sg.InputText(config.get('database', 'type'))],
-            [sg.Push(), sg.Text('User Name:'), sg.InputText(config.get('database', 'username'))],
-            [sg.Push(), sg.Text('Password:'), sg.InputText(config.get('database', 'password'), password_char='*')],
-            [sg.Push(), sg.Text('Host:'), sg.InputText(config.get('database', 'host'))],
-            [sg.Push(), sg.Text('Port:'), sg.InputText(config.get('database', 'port'))],
-            [sg.Push(), sg.Text('Database Name:'), sg.InputText(config.get('database', 'dbname'))],
-            [sg.Text('Fernhill', size=(55, 1), justification='center')],
-            [sg.Push(), sg.Text('Connection String:'), sg.InputText(config.get('fernhill', 'connstring'))],
-            [sg.Push(), sg.Text('Automatically Update?'), sg.Radio('Yes', "AutoUpdate", default=au1, size=(10,1), k='-AU1-'), sg.Radio('No', "AutoUpdate", default=au2, size=(10,1), k='-AU2-')],
-            [sg.Push(), sg.Text('Auto Update Runs at 6:00am and 6:00pm.', size=(55, 1), justification='center')],
-            [sg.Push(), sg.Text('YOU MUST HIT THE SUBMIT BUTTON TO SAVE CONFIG CHANGES', size=(55, 1), justification='center')],
-            [sg.Button('Submit', size=(25, 1), pad=((135, 0), (15, 15)))]
+            [sg.Text('Database', size=(65, 1), justification='center')],
+            [sg.Push(), sg.Text('Type:'), sg.InputText(config.get('database', 'type'), pad=((0, 100), (0, 0)))],
+            [sg.Push(), sg.Text('User Name:'), sg.InputText(config.get('database', 'username'), pad=((0, 100), (0, 0)))],
+            [sg.Push(), sg.Text('Password:'), sg.InputText(config.get('database', 'password'), password_char='*', pad=((0, 100), (0, 0)))],
+            [sg.Push(), sg.Text('Host:'), sg.InputText(config.get('database', 'host'), pad=((0, 100), (0, 0)))],
+            [sg.Push(), sg.Text('Port:'), sg.InputText(config.get('database', 'port'), pad=((0, 100), (0, 0)))],
+            [sg.Push(), sg.Text('Database Name:'), sg.InputText(config.get('database', 'dbname'), pad=((0, 100), (0, 0)))],
+            [sg.Text('Fernhill', size=(65, 1), justification='center')],
+            [sg.Push(), sg.Text('Connection String:'), sg.InputText(config.get('fernhill', 'connstring'), pad=((0, 100), (0, 0)))],
+            [sg.Push(), sg.Text('Automatically Update?'), sg.Radio('Yes', "AutoUpdate", default=au1, size=(10, 1), k='-AU1-'), sg.Radio('No', "AutoUpdate", default=au2, size=(10, 1), k='-AU2-', pad=((0, 100), (0, 0)))],
+            [sg.Push(), sg.Text('Auto Update Runs at 6:00am and 6:00pm.', size=(65, 1), justification='center')],
+            [sg.Push(), sg.Text('YOU MUST HIT THE SUBMIT BUTTON TO SAVE CONFIG CHANGES', size=(65, 1), justification='center')],
+            [sg.Button('Submit', size=(25, 1), pad=((170, 0), (15, 15)))]
         ]
         return settings_layout
     else:
@@ -249,13 +249,13 @@ def layouts(settings_layout):
     """
     sg.theme('dark grey 9')
     logging_layout = [
-        [sg.Multiline(size=(65, 25), font='Courier 8', expand_x=True, expand_y=True, write_only=True,
-                      reroute_stdout=True, reroute_stderr=True, echo_stdout_stderr=True, autoscroll=True, auto_refresh=True)],
+        [sg.Multiline(size=(75, 25), font='Courier 8', expand_x=True, expand_y=False, write_only=True,
+                      reroute_stdout=True, reroute_stderr=True, echo_stdout_stderr=True, reroute_cprint=True, autoscroll=True, auto_refresh=True, background_color='black')],
         [sg.Button("Start Update"), sg.Button("Minimize to System Tray")]
     ]
 
     layout = [
-        [sg.Text('Fernhill To Postgres Database Transfer Tool', size=(60, 2), justification='center', relief=sg.RELIEF_RIDGE, k='-TEXT HEADING-')]
+        [sg.Text('Fernhill To Postgres Database Transfer Tool', size=(69, 2), justification='center', relief=sg.RELIEF_RIDGE, k='-TEXT HEADING-')]
     ]
 
     layout += [[sg.TabGroup([[
